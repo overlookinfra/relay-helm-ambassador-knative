@@ -1,0 +1,90 @@
+{{- $name := include "ambassador.name" . -}}
+{{- $fullname := include "ambassador.fullname" . -}}
+{{- $namespace := .Release.Namespace -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $namespace }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: "{{ .Values.image.tag }}"
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ include "ambassador.chart" . }}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/version: "{{ .Values.image.tag }}"
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        helm.sh/chart: {{ include "ambassador.chart" . }}
+    spec:
+      affinity:
+        nodeAffinity:
+          {{- toYaml .Values.affinity.nodeAffinity | nindent 10 }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ $name }}
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+              topologyKey: kubernetes.io/hostname
+            weight: 50
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      containers:
+      - env:
+        - name: AMBASSADOR_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: AMBASSADOR_KNATIVE_SUPPORT
+          value: "true"
+        - name: AMBASSADOR_ID
+          value: "{{ .Values.ambassador.id }}"
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        livenessProbe:
+          httpGet:
+            path: /ambassador/v0/check_alive
+            port: 8877
+          initialDelaySeconds: 30
+          periodSeconds: 3
+        name: {{ $name }}
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 8443
+          name: https
+        - containerPort: 8877
+          name: admin
+        readinessProbe:
+          httpGet:
+            path: /ambassador/v0/check_ready
+            port: 8877
+          initialDelaySeconds: 30
+          periodSeconds: 3
+        resources:
+{{ toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /tmp/ambassador-pod-info
+          name: ambassador-pod-info
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 8888
+      serviceAccountName: {{ include "ambassador.serviceAccountName" . }}
+      volumes:
+      - downwardAPI:
+          items:
+          - fieldRef:
+              fieldPath: metadata.labels
+            path: labels
+        name: ambassador-pod-info

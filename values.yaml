@@ -1,0 +1,31 @@
+image:
+  repository: quay.io/datawire/ambassador
+  tag: 1.2.2
+  pullPolicy: IfNotPresent
+
+autoScaling:
+  minReplicas: 3
+  maxReplicas: 9
+
+ambassador:
+  id: default
+
+affinity:
+  nodeAffinity: {}
+
+tolerations: []
+
+resources:
+  limits:
+    cpu: 1
+    memory: 800Mi
+  requests:
+    cpu: 200m
+    memory: 200Mi
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
